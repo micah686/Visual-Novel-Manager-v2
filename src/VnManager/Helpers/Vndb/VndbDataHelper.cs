@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -12,6 +13,7 @@ using System.Windows.Media.Imaging;
 using System.Xml.Serialization;
 using AdysTech.CredentialManager;
 using LiteDB;
+using MonkeyCache.FileStore;
 using Sentry;
 using Stylet;
 using VnManager.Models;
@@ -35,24 +37,33 @@ namespace VnManager.Helpers.Vndb
                 {
                     return new BindableCollection<VndbInfoViewModel.VnRelationsBinding>();
                 }
-                var cred = CredentialManager.GetCredentials(App.CredDb);
-                if (cred == null || cred.UserName.Length < 1)
-                {
-                    return new BindableCollection<VndbInfoViewModel.VnRelationsBinding>();
-                }
-                using (var db = new LiteDatabase($"{App.GetDbStringWithoutPass}'{cred.Password}'"))
-                {
-                    var relationCollection = new BindableCollection<VndbInfoViewModel.VnRelationsBinding>();
-                    var vnRelations = db.GetCollection<VnInfoRelations>(DbVnInfo.VnInfo_Relations.ToString()).Query()
-                        .Where(x => x.VnId == VndbContentViewModel.VnId && x.Official.ToUpper(CultureInfo.InvariantCulture) == "YES").ToList();
-                    foreach (var relation in vnRelations)
-                    {
-                        var entry = new VndbInfoViewModel.VnRelationsBinding { RelTitle = relation.Title, RelRelation = relation.Relation };
-                        relationCollection.Add(entry);
-                    }
 
-                    return relationCollection;
+                if (Barrel.Current.Exists($"VnRelations-{VndbContentViewModel.VnId}") || !Barrel.Current.IsExpired($"VnRelations-{VndbContentViewModel.VnId}"))
+                {
+                    return Barrel.Current.Get<BindableCollection<VndbInfoViewModel.VnRelationsBinding>>($"VnRelations-{VndbContentViewModel.VnId}");
                 }
+                else
+                {
+                    var cred = CredentialManager.GetCredentials(App.CredDb);
+                    if (cred == null || cred.UserName.Length < 1)
+                    {
+                        return new BindableCollection<VndbInfoViewModel.VnRelationsBinding>();
+                    }
+                    using (var db = new LiteDatabase($"{App.GetDbStringWithoutPass}'{cred.Password}'"))
+                    {
+                        var relationCollection = new BindableCollection<VndbInfoViewModel.VnRelationsBinding>();
+                        var vnRelations = db.GetCollection<VnInfoRelations>(DbVnInfo.VnInfo_Relations.ToString()).Query()
+                            .Where(x => x.VnId == VndbContentViewModel.VnId && x.Official.ToUpper(CultureInfo.InvariantCulture) == "YES").ToList();
+                        foreach (var relation in vnRelations)
+                        {
+                            var entry = new VndbInfoViewModel.VnRelationsBinding { RelTitle = relation.Title, RelRelation = relation.Relation };
+                            relationCollection.Add(entry);
+                        }
+                        Barrel.Current.Add($"VnRelations-{VndbContentViewModel.VnId}", relationCollection, TimeSpan.FromDays(365));
+                        return relationCollection;
+                    }
+                }
+                
             }
             catch (Exception e)
             {

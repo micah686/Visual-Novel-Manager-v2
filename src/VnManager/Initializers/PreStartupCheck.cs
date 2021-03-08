@@ -8,6 +8,8 @@ using System.IO.Abstractions;
 using System.Linq;
 using AdysTech.CredentialManager;
 using LiteDB;
+using MonkeyCache;
+using MonkeyCache.FileStore;
 using Sentry;
 using VnManager.Helpers;
 using VnManager.Models.Db;
@@ -30,6 +32,7 @@ namespace VnManager.Initializers
             DeleteOldBackupDatabase();
             SentrySetup();
             SetupCategories();
+            SetupCache();
         }
 
         /// <summary>
@@ -177,6 +180,12 @@ namespace VnManager.Initializers
 
             var entry = new UserDataCategories() { CategoryName = "All" };
             dbUserData.Insert(entry);
+        }
+
+        private static void SetupCache()
+        {
+            Barrel.ApplicationId = "VnCache";
+            BarrelUtils.SetBaseCachePath(@$"{App.AssetDirPath}\cache");
         }
     }
 }
